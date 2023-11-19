@@ -507,7 +507,7 @@ int64_t botProcessUpdates(int64_t offset, int timeout) {
             int j;
             for (j = 0; Bot.triggers[j]; j++) {
                 if (strmatch(Bot.triggers[j], strlen(Bot.triggers[j]),
-                    s, strlen(s), 0))
+                    s, strlen(s), 1))
                 {
                     break;
                 }
