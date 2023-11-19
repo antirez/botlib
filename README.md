@@ -17,3 +17,5 @@ command line option.
 ## APIs
 
 ... Work in progress ...
+
+For the bot API check `mybot.c` example itself. The basic usage is pretty simple. However for all the other stuff, like the Sqlite3 abstractions, they are taken from [Stonky](https://github.com/antirez/stonky), so the code there (which is very accessible) will provide some help. I hope to document this project better. For now my main goal was to stop duplicating Stonly to create new bots with all the common code inside.
