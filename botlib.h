@@ -49,6 +49,7 @@ sds makeHTTPGETCall(const char *url, int *resptr);
 int startBot(char *createdb_query, int argc, char **argv, int flags, TBRequestCallback callback, char **triggers);
 sds makeGETBotRequest(const char *action, int *resptr, char **optlist, int numopt);
 int botSendMessage(int64_t target, sds text, int64_t reply_to);
+int botSendImage(int64_t target, char *filename);
 
 /* Database. */
 int kvSetLen(const char *key, const char *value, size_t vlen, int64_t expire);

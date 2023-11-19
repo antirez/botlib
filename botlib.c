@@ -325,6 +325,59 @@ sds makeGETBotRequest(const char *action, int *resptr, char **optlist, int numop
     return body;
 }
 
+/* Send an image using the sendPhoto endpoint. Return 1 on success, 0
+ * on error. */
+int botSendImage(int64_t target, char *filename) {
+    CURL *curl;
+    CURLcode res;
+    int retval = 0;
+    struct curl_httppost *formpost = NULL;
+    struct curl_httppost *lastptr = NULL;
+
+    /* Build the POST form to submit. */
+    sds strtarget = sdsfromlonglong(target);
+    curl_formadd(&formpost, &lastptr,
+             CURLFORM_COPYNAME, "chat_id",
+             CURLFORM_COPYCONTENTS, strtarget,
+             CURLFORM_END);
+    sdsfree(strtarget);
+
+    curl_formadd(&formpost, &lastptr,
+                 CURLFORM_COPYNAME, "photo",
+                 CURLFORM_FILE, filename,
+                 CURLFORM_END);
+
+    curl = curl_easy_init();
+    if (curl) {
+        char url[1024];
+        snprintf(url, sizeof(url),
+            "https://api.telegram.org/bot%s/sendPhoto", Bot.apikey);
+        curl_easy_setopt(curl, CURLOPT_URL, url);
+        curl_easy_setopt(curl, CURLOPT_HTTPPOST, formpost);
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 1L);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15);
+        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 15);
+
+        /* Perform the request, res will get the return code */
+        res = curl_easy_perform(curl);
+        retval = CURLE_OK ? 1 : 0;
+
+        /* Check for errors */
+        if (res == CURLE_OK) {
+            /* Return 0 if the request worked but returned a 500 code. */
+            long code;
+            curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
+            if (code == 500) retval = 0;
+        }
+
+        /* always cleanup */
+        curl_easy_cleanup(curl);
+    }
+    curl_formfree(formpost);
+    return retval;
+}
+
 /* =============================================================================
  * Higher level Telegram bot API.
  * ===========================================================================*/
