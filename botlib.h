@@ -53,17 +53,17 @@ int botSendMessage(int64_t target, sds text, int64_t reply_to);
 int botSendImage(int64_t target, char *filename);
 
 /* Database. */
-int kvSetLen(const char *key, const char *value, size_t vlen, int64_t expire);
-int kvSet(const char *key, const char *value, int64_t expire);
-sds kvGet(const char *key);
-void kvDel(const char *key);
+int kvSetLen(sqlite3 *dbhandle, const char *key, const char *value, size_t vlen, int64_t expire);
+int kvSet(sqlite3 *dbhandle, const char *key, const char *value, int64_t expire);
+sds kvGet(sqlite3 *dbhandle, const char *key);
+void kvDel(sqlite3 *dbhandle, const char *key);
 void sqlEnd(sqlRow *row);
 int sqlNextRow(sqlRow *row);
-int sqlInsert(const char *sql, ...);
-int sqlQuery(const char *sql, ...);
-int sqlSelect(sqlRow *row, const char *sql, ...);
-int sqlSelectOneRow(sqlRow *row, const char *sql, ...);
-int64_t sqlSelectInt(const char *sql, ...);
+int sqlInsert(sqlite3 *dbhandle, const char *sql, ...);
+int sqlQuery(sqlite3 *dbhandle, const char *sql, ...);
+int sqlSelect(sqlite3 *dbhandle, sqlRow *row, const char *sql, ...);
+int sqlSelectOneRow(sqlite3 *dbhandle, sqlRow *row, const char *sql, ...);
+int64_t sqlSelectInt(sqlite3 *dbhandle, const char *sql, ...);
 
 /* Json */
 cJSON *cJSON_Select(cJSON *o, const char *fmt, ...);

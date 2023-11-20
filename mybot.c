@@ -14,9 +14,6 @@
 void handleRequest(int type, int64_t from, int64_t target, sqlite3 *dbhandle, char *request, int argc, sds *argv)
 {
     UNUSED(type);
-    UNUSED(dbhandle);
-    UNUSED(argc);
-    UNUSED(argv);
 
     char buf[256];
     char *where = type == TB_TYPE_PRIVATE ? "privately" : "publicly";
@@ -33,7 +30,7 @@ void handleRequest(int type, int64_t from, int64_t target, sqlite3 *dbhandle, ch
      * foo key to bar. Then if somebody write "foo?" and we have an
      * associated key, we reply with what "foo" is. */
     if (argc >= 3 && !strcasecmp(argv[1],"is")) {
-        kvSet(argv[0],request,0);
+        kvSet(dbhandle,argv[0],request,0);
         /* Note that in this case we don't use 0 as "from" field, so
          * we are sending a reply to the user, not a general message
          * on the channel. */
@@ -45,7 +42,7 @@ void handleRequest(int type, int64_t from, int64_t target, sqlite3 *dbhandle, ch
         char *copy = strdup(request);
         copy[reqlen-1] = 0;
         printf("Looking for key %s\n", copy);
-        sds res = kvGet(copy);
+        sds res = kvGet(dbhandle,copy);
         if (res) {
             botSendMessage(target,res,0);
         }

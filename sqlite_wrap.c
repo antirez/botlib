@@ -13,11 +13,8 @@
 
 #define SHOW_QUERY_ERRORS 1
 
-extern _Thread_local sqlite3 *DbHandle;
-
 /* This is the low level function that we use to model all the higher level
- * functions. It is based on the idea that DbHandle is a per-thread SQLite
- * handle already available: the rest of the code will ensure this.
+ * functions.
  *
  * Queries can contain ?s ?b ?i and ?d special specifiers that are bound to
  * the SQL query, and must be present later as additional arguments after
@@ -39,7 +36,7 @@ extern _Thread_local sqlite3 *DbHandle;
  * Note that is valid to call sqlEnd() even if the query didn't return
  * SQLITE_ROW, since in such case row->stmt is set to NULL.
  */
-int sqlGenericQuery(sqlRow *row, const char *sql, va_list ap) {
+int sqlGenericQuery(sqlite3 *dbhandle, sqlRow *row, const char *sql, va_list ap) {
     int rc = SQLITE_ERROR;
     sqlite3_stmt *stmt = NULL;
     sds query = sdsempty();
@@ -75,12 +72,12 @@ int sqlGenericQuery(sqlRow *row, const char *sql, va_list ap) {
     }
 
     /* Prepare the query and bind the query arguments. */
-    rc = sqlite3_prepare_v2(DbHandle,query,-1,&stmt,NULL);
+    rc = sqlite3_prepare_v2(dbhandle,query,-1,&stmt,NULL);
     if (rc != SQLITE_OK) {
         if (SHOW_QUERY_ERRORS) printf("%p: Query error: %s: %s\n",
-                                (void*)DbHandle,
+                                (void*)dbhandle,
                                 query,
-                                sqlite3_errmsg(DbHandle));
+                                sqlite3_errmsg(dbhandle));
         goto error;
     }
 
@@ -171,12 +168,12 @@ int sqlNextRow(sqlRow *row) {
 
 /* Wrapper for sqlGenericQuery() returning the last inserted ID or 0
  * on error. */
-int sqlInsert(const char *sql, ...) {
+int sqlInsert(sqlite3 *dbhandle, const char *sql, ...) {
     int64_t lastid = 0;
     va_list ap;
     va_start(ap,sql);
-    int rc = sqlGenericQuery(NULL,sql,ap);
-    if (rc == SQLITE_DONE) lastid = sqlite3_last_insert_rowid(DbHandle);
+    int rc = sqlGenericQuery(dbhandle,NULL,sql,ap);
+    if (rc == SQLITE_DONE) lastid = sqlite3_last_insert_rowid(dbhandle);
     va_end(ap);
     return lastid;
 }
@@ -184,11 +181,11 @@ int sqlInsert(const char *sql, ...) {
 /* Wrapper for sqlGenericQuery() returning 1 if the query resulted in
  * SQLITE_DONE, otherwise zero. This is good for UPDATE and DELETE
  * statements. */
-int sqlQuery(const char *sql, ...) {
+int sqlQuery(sqlite3 *dbhandle, const char *sql, ...) {
     int64_t retval = 0;
     va_list ap;
     va_start(ap,sql);
-    int rc = sqlGenericQuery(NULL,sql,ap);
+    int rc = sqlGenericQuery(dbhandle,NULL,sql,ap);
     retval = (rc == SQLITE_DONE);
     va_end(ap);
     return retval;
@@ -196,10 +193,10 @@ int sqlQuery(const char *sql, ...) {
 
 /* Wrapper for sqlGenericQuery() using varialbe number of args.
  * This is what you want when doing SELECT queries. */
-int sqlSelect(sqlRow *row, const char *sql, ...) {
+int sqlSelect(sqlite3 *dbhandle, sqlRow *row, const char *sql, ...) {
     va_list ap;
     va_start(ap,sql);
-    int rc = sqlGenericQuery(row,sql,ap);
+    int rc = sqlGenericQuery(dbhandle,row,sql,ap);
     va_end(ap);
     return rc;
 }
@@ -208,10 +205,10 @@ int sqlSelect(sqlRow *row, const char *sql, ...) {
  * This is what you want when doing SELECT queries that return a
  * single row. This function will care to also call sqlNextRow() for
  * you in case the return value is SQLITE_ROW. */
-int sqlSelectOneRow(sqlRow *row, const char *sql, ...) {
+int sqlSelectOneRow(sqlite3 *dbhandle, sqlRow *row, const char *sql, ...) {
     va_list ap;
     va_start(ap,sql);
-    int rc = sqlGenericQuery(row,sql,ap);
+    int rc = sqlGenericQuery(dbhandle,row,sql,ap);
     if (rc == SQLITE_ROW) sqlNextRow(row);
     va_end(ap);
     return rc;
@@ -219,12 +216,12 @@ int sqlSelectOneRow(sqlRow *row, const char *sql, ...) {
 
 /* Wrapper for sqlGenericQuery() to do a SELECT and return directly
  * the integer of the first row, or zero on error. */
-int64_t sqlSelectInt(const char *sql, ...) {
+int64_t sqlSelectInt(sqlite3 *dbhandle, const char *sql, ...) {
     sqlRow row;
     int64_t i = 0;
     va_list ap;
     va_start(ap,sql);
-    int rc = sqlGenericQuery(&row,sql,ap);
+    int rc = sqlGenericQuery(dbhandle,&row,sql,ap);
     if (rc == SQLITE_ROW) {
         sqlNextRow(&row);
         i = row.col[0].i;
@@ -242,12 +239,12 @@ int64_t sqlSelectInt(const char *sql, ...) {
 /* Set the key to the specified value and expire time. An expire of zero
  * means the key should not be expired at all. Return 1 on success, or
  * 0 on error. */
-int kvSetLen(const char *key, const char *value, size_t vlen, int64_t expire) {
+int kvSetLen(sqlite3 *dbhandle, const char *key, const char *value, size_t vlen, int64_t expire) {
     if (expire) expire += time(NULL);
-    if (!sqlInsert("INSERT INTO KeyValue VALUES(?i,?s,?b)",
+    if (!sqlInsert(dbhandle,"INSERT INTO KeyValue VALUES(?i,?s,?b)",
                    expire,key,value,vlen))
     {
-        if (!sqlQuery("UPDATE KeyValue SET expire=?i,value=?b WHERE key=?s",
+        if (!sqlQuery(dbhandle,"UPDATE KeyValue SET expire=?i,value=?b WHERE key=?s",
                       expire,value,vlen,key))
         {
             return 0;
@@ -257,20 +254,20 @@ int kvSetLen(const char *key, const char *value, size_t vlen, int64_t expire) {
 }
 
 /* Wrapper where the value len is obtained via strlen().*/
-int kvSet(const char *key, const char *value, int64_t expire) {
-    return kvSetLen(key,value,strlen(value),expire);
+int kvSet(sqlite3 *dbhandle,const char *key, const char *value, int64_t expire) {
+    return kvSetLen(dbhandle,key,value,strlen(value),expire);
 }
 
 /* Get the specified key and return it as an SDS string. If the value is
  * expired or does not exist NULL is returned. */
-sds kvGet(const char *key) {
+sds kvGet(sqlite3 *dbhandle,const char *key) {
     sds value = NULL;
     sqlRow row;
-    sqlSelect(&row,"SELECT expire,value FROM KeyValue WHERE key=?s",key);
+    sqlSelect(dbhandle,&row,"SELECT expire,value FROM KeyValue WHERE key=?s",key);
     if (sqlNextRow(&row)) {
         int64_t expire = row.col[0].i;
         if (expire && expire < time(NULL)) {
-            sqlQuery("DELETE FROM KeyValue WHERE key=?s",key);
+            sqlQuery(dbhandle,"DELETE FROM KeyValue WHERE key=?s",key);
         } else {
             value = sdsnewlen(row.col[1].s,row.col[1].i);
         }
@@ -280,7 +277,6 @@ sds kvGet(const char *key) {
 }
 
 /* Delete the key if it exists. */
-void kvDel(const char *key) {
-    sqlQuery("DELETE FROM KeyValue WHERE key=?s",key);
+void kvDel(sqlite3 *dbhandle, const char *key) {
+    sqlQuery(dbhandle,"DELETE FROM KeyValue WHERE key=?s",key);
 }
-

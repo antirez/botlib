@@ -77,10 +77,6 @@ struct {
     uint64_t queries;       /* Number of queries received. */
 } botStats;
 
-int kvSetLen(const char *key, const char *value, size_t vlen, int64_t expire);
-int kvSet(const char *key, const char *value, int64_t expire);
-sds kvGet(const char *key);
-
 /* ============================================================================
  * Utils
  * ========================================================================= */
