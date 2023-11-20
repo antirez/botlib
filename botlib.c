@@ -416,7 +416,8 @@ int botSendMessage(int64_t target, sds text, int64_t reply_to) {
 typedef struct botRequest {
     int type;           /* TB_TYPE_PRIVATE, ... */
     sds request;        /* The request string. */
-    int64_t target;     /* Target channel where to reply. */
+    int64_t from;       /* ID of user sending the message. */
+    int64_t target;     /* Target channel/user where to reply. */
 } botRequest;
 
 /* Free the bot request and associated data. */
@@ -482,7 +483,7 @@ void *botHandleRequest(void *arg) {
     int argc;
     sds *argv = sdssplitargs(br->request,&argc);
 
-    Bot.callback(br->type, br->target, DbHandle, br->request, argc, argv);
+    Bot.callback(br->type, br->from, br->target, DbHandle, br->request, argc, argv);
 
     freeBotRequest(br);
     sdsfreesplitres(argv,argc);
@@ -533,6 +534,9 @@ int64_t botProcessUpdates(int64_t offset, int timeout) {
         if (chatid == NULL) continue;
         int64_t target = (int64_t) chatid->valuedouble;
 
+        cJSON *fromid = cJSON_Select(msg,".from.id:n");
+        int64_t from = fromid ? (int64_t) fromid->valuedouble : 0;
+
         cJSON *chattype = cJSON_Select(msg,".chat.type:s");
         char *ct = chattype->valuestring;
         int type = TB_TYPE_UNKNOWN;
@@ -548,7 +552,8 @@ int64_t botProcessUpdates(int64_t offset, int timeout) {
         time_t timestamp = date->valuedouble;
         cJSON *text = cJSON_Select(msg,".text:s");
         if (text == NULL) continue;
-        if (Bot.verbose) printf(".text (target: %lld): %s\n",
+        if (Bot.verbose) printf(".text (from: %lld, target: %lld): %s\n",
+            (long long) from,
             (long long) target,
             text->valuestring);
 
@@ -575,6 +580,7 @@ int64_t botProcessUpdates(int64_t offset, int timeout) {
         botRequest *bt = createBotRequest();
         bt->type = type;
         bt->request = request;
+        bt->from = from;
         bt->target = target;
         pthread_t tid;
         if (pthread_create(&tid,NULL,botHandleRequest,bt) != 0) {

@@ -14,7 +14,7 @@
 /* Bot callback type. This must be registed when the bot is initialized.
  * Each time the bot receives a command / message matching the list of
  * trigger strings, it starts a thread and calls this callback. */
-typedef void (*TBRequestCallback)(int type, int64_t target, sqlite3 *dbhandle, char *request, int argc, sds *argv);
+typedef void (*TBRequestCallback)(int type, int64_t from, int64_t target, sqlite3 *dbhandle, char *request, int argc, sds *argv);
 
 #define TB_FLAGS_NONE 0
 #define TB_FLAGS_IGNORE_BAD_ARG (1<<0)

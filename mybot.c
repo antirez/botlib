@@ -11,7 +11,7 @@
  * For group messages, this function is ONLY called if one of the patterns
  * specified as "triggers" in startBot() matched the message. Otherwise we
  * would spawn threads too often :) */
-void handleRequest(int type, int64_t target, sqlite3 *dbhandle, char *request, int argc, sds *argv)
+void handleRequest(int type, int64_t from, int64_t target, sqlite3 *dbhandle, char *request, int argc, sds *argv)
 {
     UNUSED(type);
     UNUSED(dbhandle);
@@ -34,7 +34,10 @@ void handleRequest(int type, int64_t target, sqlite3 *dbhandle, char *request, i
      * associated key, we reply with what "foo" is. */
     if (argc >= 3 && !strcasecmp(argv[1],"is")) {
         kvSet(argv[0],request,0);
-        botSendMessage(target,"Ok, I'll remember.",0);
+        /* Note that in this case we don't use 0 as "from" field, so
+         * we are sending a reply to the user, not a general message
+         * on the channel. */
+        botSendMessage(target,"Ok, I'll remember.",from);
     }
 
     int reqlen = strlen(request);
