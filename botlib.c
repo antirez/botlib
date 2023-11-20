@@ -415,6 +415,7 @@ typedef struct botRequest {
     sds request;        /* The request string. */
     int64_t from;       /* ID of user sending the message. */
     int64_t target;     /* Target channel/user where to reply. */
+    int64_t id;         /* Message ID. */
 } botRequest;
 
 /* Free the bot request and associated data. */
@@ -427,7 +428,9 @@ void freeBotRequest(botRequest *br) {
 botRequest *createBotRequest(void) {
     botRequest *br = malloc(sizeof(*br));
     br->request = NULL;
+    br->from = 0;
     br->target = 0;
+    br->id = 0;
     br->type = 0;
     return br;
 }
@@ -480,7 +483,7 @@ void *botHandleRequest(void *arg) {
     int argc;
     sds *argv = sdssplitargs(br->request,&argc);
 
-    Bot.req_callback(br->type, br->from, br->target, DbHandle, br->request, argc, argv);
+    Bot.req_callback(br->type, br->from, br->target, br->id, DbHandle, br->request, argc, argv);
 
     freeBotRequest(br);
     sdsfreesplitres(argv,argc);
@@ -534,6 +537,9 @@ int64_t botProcessUpdates(int64_t offset, int timeout) {
         cJSON *fromid = cJSON_Select(msg,".from.id:n");
         int64_t from = fromid ? (int64_t) fromid->valuedouble : 0;
 
+        cJSON *msgid = cJSON_Select(msg,".message_id:n");
+        int64_t message_id = msgid ? (int64_t) msgid->valuedouble : 0;
+
         cJSON *chattype = cJSON_Select(msg,".chat.type:s");
         char *ct = chattype->valuestring;
         int type = TB_TYPE_UNKNOWN;
@@ -579,6 +585,7 @@ int64_t botProcessUpdates(int64_t offset, int timeout) {
         bt->request = request;
         bt->from = from;
         bt->target = target;
+        bt->id = message_id;
         pthread_t tid;
         if (pthread_create(&tid,NULL,botHandleRequest,bt) != 0) {
             freeBotRequest(bt);

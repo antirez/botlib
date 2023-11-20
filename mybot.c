@@ -11,9 +11,10 @@
  * For group messages, this function is ONLY called if one of the patterns
  * specified as "triggers" in startBot() matched the message. Otherwise we
  * would spawn threads too often :) */
-void handleRequest(int type, int64_t from, int64_t target, sqlite3 *dbhandle, char *request, int argc, sds *argv)
+void handleRequest(int type, int64_t from, int64_t target, int64_t message_id, sqlite3 *dbhandle, char *request, int argc, sds *argv)
 {
     UNUSED(type);
+    UNUSED(from);
 
     char buf[256];
     char *where = type == TB_TYPE_PRIVATE ? "privately" : "publicly";
@@ -34,7 +35,7 @@ void handleRequest(int type, int64_t from, int64_t target, sqlite3 *dbhandle, ch
         /* Note that in this case we don't use 0 as "from" field, so
          * we are sending a reply to the user, not a general message
          * on the channel. */
-        botSendMessage(target,"Ok, I'll remember.",from);
+        botSendMessage(target,"Ok, I'll remember.",message_id);
     }
 
     int reqlen = strlen(request);
