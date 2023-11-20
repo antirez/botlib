@@ -15,6 +15,7 @@
  * Each time the bot receives a command / message matching the list of
  * trigger strings, it starts a thread and calls this callback. */
 typedef void (*TBRequestCallback)(int type, int64_t from, int64_t target, sqlite3 *dbhandle, char *request, int argc, sds *argv);
+typedef void (*TBCronCallback)(sqlite3 *dbhandle);
 
 #define TB_FLAGS_NONE 0
 #define TB_FLAGS_IGNORE_BAD_ARG (1<<0)
@@ -46,7 +47,7 @@ sds makeHTTPGETCall(const char *url, int *resptr);
 
 /* Telegram bot API. */
 
-int startBot(char *createdb_query, int argc, char **argv, int flags, TBRequestCallback callback, char **triggers);
+int startBot(char *createdb_query, int argc, char **argv, int flags, TBRequestCallback req_callback, TBCronCallback cron_callback, char **triggers);
 sds makeGETBotRequest(const char *action, int *resptr, char **optlist, int numopt);
 int botSendMessage(int64_t target, sds text, int64_t reply_to);
 int botSendImage(int64_t target, char *filename);

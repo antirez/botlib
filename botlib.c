@@ -64,7 +64,8 @@ struct {
     char *dbfile;                       // Change with --dbfile.
     char **triggers;                    // Strings triggering processing.
     sds apikey;                         // Telegram API key for the bot.
-    TBRequestCallback callback;         // Callback handling requests.
+    TBRequestCallback req_callback;     // Callback handling requests.
+    TBCronCallback cron_callback;
 } Bot;
 
 /* Global stats. Sometimes we access such stats from threads without caring
@@ -483,7 +484,7 @@ void *botHandleRequest(void *arg) {
     int argc;
     sds *argv = sdssplitargs(br->request,&argc);
 
-    Bot.callback(br->type, br->from, br->target, DbHandle, br->request, argc, argv);
+    Bot.req_callback(br->type, br->from, br->target, DbHandle, br->request, argc, argv);
 
     freeBotRequest(br);
     sdsfreesplitres(argv,argc);
@@ -616,6 +617,7 @@ void botMain(void) {
          * errors for instance), so wait a bit at every cycle, but only
          * if we didn't made any progresses with the ID. */
         if (nextid == previd) usleep(100000);
+        if (Bot.cron_callback) Bot.cron_callback(DbHandle);
     }
 }
 
@@ -642,7 +644,7 @@ void resetBotStats(void) {
     botStats.queries = 0;
 }
 
-int startBot(char *createdb_query, int argc, char **argv, int flags, TBRequestCallback callback, char **triggers) {
+int startBot(char *createdb_query, int argc, char **argv, int flags, TBRequestCallback req_callback, TBCronCallback cron_callback, char **triggers) {
     srand(time(NULL));
 
     Bot.debug = 0;
@@ -650,7 +652,8 @@ int startBot(char *createdb_query, int argc, char **argv, int flags, TBRequestCa
     Bot.dbfile = "./mybot.sqlite";
     Bot.triggers = triggers;
     Bot.apikey = NULL;
-    Bot.callback = callback;
+    Bot.req_callback = req_callback;
+    Bot.cron_callback = cron_callback;
 
     /* Parse options. */
     for (int j = 1; j < argc; j++) {
