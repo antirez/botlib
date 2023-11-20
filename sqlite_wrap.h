@@ -1,6 +1,8 @@
 #ifndef SQLITE_WRAPPER_H
 #define SQLITE_WRAPPER_H
 
+#include <stdint.h>
+
 #define SQL_MAX_SPEC 32     /* Maximum number of ?... specifiers per query. */
 
 /* The sqlCol and sqlRow structures are used in order to return rows. */
