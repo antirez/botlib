@@ -433,7 +433,8 @@ BotRequest *createBotRequest(void) {
     br->from = 0;
     br->target = 0;
     br->msg_id = 0;
-    br->type = 0;
+    br->type = TB_TYPE_UNKNOWN;
+    br->media_type = TB_MEDIA_NONE;
     return br;
 }
 

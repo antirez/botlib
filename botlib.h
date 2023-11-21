@@ -24,6 +24,7 @@ typedef struct BotRequest {
     int64_t msg_id;     /* Message ID. */
     sds *argv;          /* Request split to single words. */
     int argc;           /* Number of words. */
+    int media_type;     /* TB_MEDIA_* */
 } BotRequest;
 
 /* Bot callback type. This must be registed when the bot is initialized.
@@ -33,11 +34,17 @@ typedef void (*TBRequestCallback)(sqlite3 *dbhandle, BotRequest *br);
 typedef void (*TBCronCallback)(sqlite3 *dbhandle);
 
 /* Type of request used as arugment of the request callback. */
-#define TB_TYPE_UNKNOWN -1
-#define TB_TYPE_PRIVATE 0
-#define TB_TYPE_GROUP 1
-#define TB_TYPE_SUPERGROUP 2
-#define TB_TYPE_CHANNEL 3
+#define TB_TYPE_UNKNOWN 0
+#define TB_TYPE_PRIVATE 1
+#define TB_TYPE_GROUP 2
+#define TB_TYPE_SUPERGROUP 3
+#define TB_TYPE_CHANNEL 4
+
+#define TB_MEDIA_NONE 0
+#define TB_MEDIA_IMAGE 1
+#define TB_MEDIA_AUDIO 2
+#define TB_MEDIA_VOICE 3
+/* ... More ar missing ... */
 
 /* Concatenate this when starting the bot and passing your create
  * DB query for Sqlite database initialization. */
