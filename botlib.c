@@ -520,6 +520,11 @@ int64_t botProcessUpdates(int64_t offset, int timeout) {
     sdsfree(options[1]);
     sdsfree(options[3]);
 
+    /* If two --debug options are provided, log the whole Telegram
+     * reply here. */
+    if (Bot.debug >= 2)
+        printf("RECEIVED FROM TELEGRAM API:\n%s\n",body);
+
     /* Parse the JSON in order to extract the message info. */
     cJSON *json = cJSON_Parse(body);
     cJSON *result = cJSON_Select(json,".result:a");

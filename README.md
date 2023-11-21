@@ -1,5 +1,7 @@
 # BOTLIB - Telegram C bot framework
 
+WARNING: API is work in progress. Don't consider it reliable until this message is removed.
+
 ## Installation
 
 1. Create your bot using the Telegram [@BotFather](https://t.me/botfather).
