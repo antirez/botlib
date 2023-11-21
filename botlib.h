@@ -11,14 +11,26 @@
 #include "sqlite_wrap.h"
 #include "cJSON.h"
 
+#define TB_FLAGS_NONE 0
+#define TB_FLAGS_IGNORE_BAD_ARG (1<<0)
+
+/* This structure is passed to the thread processing a given user request,
+ * it's up to the thread to free it once it is done. */
+typedef struct BotRequest {
+    int type;           /* TB_TYPE_PRIVATE, ... */
+    sds request;        /* The request string. */
+    int64_t from;       /* ID of user sending the message. */
+    int64_t target;     /* Target channel/user where to reply. */
+    int64_t msg_id;     /* Message ID. */
+    sds *argv;          /* Request split to single words. */
+    int argc;           /* Number of words. */
+} BotRequest;
+
 /* Bot callback type. This must be registed when the bot is initialized.
  * Each time the bot receives a command / message matching the list of
  * trigger strings, it starts a thread and calls this callback. */
-typedef void (*TBRequestCallback)(int type, int64_t from, int64_t target, int64_t message_id, sqlite3 *dbhandle, char *request, int argc, sds *argv);
+typedef void (*TBRequestCallback)(sqlite3 *dbhandle, BotRequest *br);
 typedef void (*TBCronCallback)(sqlite3 *dbhandle);
-
-#define TB_FLAGS_NONE 0
-#define TB_FLAGS_IGNORE_BAD_ARG (1<<0)
 
 /* Type of request used as arugment of the request callback. */
 #define TB_TYPE_UNKNOWN -1

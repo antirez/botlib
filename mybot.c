@@ -11,41 +11,37 @@
  * For group messages, this function is ONLY called if one of the patterns
  * specified as "triggers" in startBot() matched the message. Otherwise we
  * would spawn threads too often :) */
-void handleRequest(int type, int64_t from, int64_t target, int64_t message_id, sqlite3 *dbhandle, char *request, int argc, sds *argv)
-{
-    UNUSED(type);
-    UNUSED(from);
-
+void handleRequest(sqlite3 *dbhandle, BotRequest *br) {
     char buf[256];
-    char *where = type == TB_TYPE_PRIVATE ? "privately" : "publicly";
-    snprintf(buf, sizeof(buf), "I just %s received: %s", where, request);
-    botSendMessage(target,buf,0);
+    char *where = br->type == TB_TYPE_PRIVATE ? "privately" : "publicly";
+    snprintf(buf, sizeof(buf), "I just %s received: %s", where, br->request);
+    botSendMessage(br->target,buf,0);
 
     /* Words received in this request. */
-    for (int j = 0; j < argc; j++)
-        printf("%d. %s | ", j, argv[j]);
+    for (int j = 0; j < br->argc; j++)
+        printf("%d. %s | ", j, br->argv[j]);
     printf("\n");
 
     /* Let's use our key-value store API on top of Sqlite. If the
      * user in a Telegram group tells "foo is bar" we will set the
      * foo key to bar. Then if somebody write "foo?" and we have an
      * associated key, we reply with what "foo" is. */
-    if (argc >= 3 && !strcasecmp(argv[1],"is")) {
-        kvSet(dbhandle,argv[0],request,0);
+    if (br->argc >= 3 && !strcasecmp(br->argv[1],"is")) {
+        kvSet(dbhandle,br->argv[0],br->request,0);
         /* Note that in this case we don't use 0 as "from" field, so
          * we are sending a reply to the user, not a general message
          * on the channel. */
-        botSendMessage(target,"Ok, I'll remember.",message_id);
+        botSendMessage(br->target,"Ok, I'll remember.",br->msg_id);
     }
 
-    int reqlen = strlen(request);
-    if (argc == 1 && reqlen && request[reqlen-1] == '?') {
-        char *copy = strdup(request);
+    int reqlen = strlen(br->request);
+    if (br->argc == 1 && reqlen && br->request[reqlen-1] == '?') {
+        char *copy = strdup(br->request);
         copy[reqlen-1] = 0;
         printf("Looking for key %s\n", copy);
         sds res = kvGet(dbhandle,copy);
         if (res) {
-            botSendMessage(target,res,0);
+            botSendMessage(br->target,res,0);
         }
         sdsfree(res);
         free(copy);
