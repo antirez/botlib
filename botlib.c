@@ -351,6 +351,9 @@ int botSendImage(int64_t target, char *filename) {
             "https://api.telegram.org/bot%s/sendPhoto", Bot.apikey);
         curl_easy_setopt(curl, CURLOPT_URL, url);
         curl_easy_setopt(curl, CURLOPT_HTTPPOST, formpost);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, makeHTTPGETCallWriter);
+        sds body = sdsempty(); // Accumulate the reply here.
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &body);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 1L);
         curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15);
@@ -358,15 +361,21 @@ int botSendImage(int64_t target, char *filename) {
 
         /* Perform the request, res will get the return code */
         res = curl_easy_perform(curl);
-        retval = CURLE_OK ? 1 : 0;
 
         /* Check for errors */
         if (res == CURLE_OK) {
+            retval = 1;
             /* Return 0 if the request worked but returned a 500 code. */
             long code;
             curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
-            if (code == 500) retval = 0;
+            if (code == 500 || code == 400) retval = 0;
+        } else {
+            retval = 0;
         }
+
+        if (retval == 0)
+            printf("sendImage() error from Telegram API: %s\n", body);
+        sdsfree(body);
 
         /* always cleanup */
         curl_easy_cleanup(curl);
