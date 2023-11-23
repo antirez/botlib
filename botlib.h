@@ -27,6 +27,7 @@ typedef struct BotRequest {
     int file_type;      /* TB_FILE_TYPE_* */
     sds file_id;        /* File ID if a file is present in the message.
                          * The file format will be given by file_type. */
+    int64_t file_size;  /* Size of the file. */
 } BotRequest;
 
 /* Bot callback type. This must be registed when the bot is initialized.
@@ -72,6 +73,7 @@ int botSendMessageAndGetInfo(int64_t target, sds text, int64_t reply_to, int64_t
 int botSendMessage(int64_t target, sds text, int64_t reply_to);
 int botEditMessageText(int64_t chat_id, int message_id, sds text);
 int botSendImage(int64_t target, char *filename);
+int botGetFile(BotRequest *br, const char *target_filename);
 void freeBotRequest(BotRequest *br);
 
 /* Database. */

@@ -35,6 +35,7 @@ void handleRequest(sqlite3 *dbhandle, BotRequest *br) {
     /* Show if the message has a voice file inside. */
     if (br->file_type == TB_FILE_TYPE_VOICE_OGG) {
         printf("Voice file ID: %s\n", br->file_id);
+        botGetFile(br,"audio.oga");
     }
 
     /* Let's use our key-value store API on top of Sqlite. If the

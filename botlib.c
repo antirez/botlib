@@ -234,7 +234,7 @@ void xfree(void *ptr) {
 
 /* The callback concatenating data arriving from CURL http requests into
  * a target SDS string. */
-size_t makeHTTPGETCallWriter(char *ptr, size_t size, size_t nmemb, void *userdata)
+size_t makeHTTPGETCallWriterSDS(char *ptr, size_t size, size_t nmemb, void *userdata)
 {
     UNUSED(size);
     sds *body = userdata;
@@ -242,9 +242,18 @@ size_t makeHTTPGETCallWriter(char *ptr, size_t size, size_t nmemb, void *userdat
     return nmemb;
 }
 
+/* The callback writing the CURL reply to a file. */
+size_t makeHTTPGETCallWriterFILE(char *ptr, size_t size, size_t nmemb, void *userdata)
+{
+    UNUSED(size);
+    FILE **fp = userdata;
+    return fwrite(ptr,1,nmemb,*fp);
+}
+
+
 /* Request the specified URL in a blocking way, returns the content (or
  * error string) as an SDS string. If 'resptr' is not NULL, the integer
- * will be set, by referece, to 1 or 0 to indicate error or success.
+ * will be set, by referece, to 1 or 0 to indicate success or error.
  * The returned SDS string must be freed by the caller both in case of
  * error and success. */
 sds makeHTTPGETCall(const char *url, int *resptr) {
@@ -256,7 +265,7 @@ sds makeHTTPGETCall(const char *url, int *resptr) {
     curl = curl_easy_init();
     if (curl) {
         curl_easy_setopt(curl, CURLOPT_URL, url);
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, makeHTTPGETCallWriter);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, makeHTTPGETCallWriterSDS);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &body);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 1L);
@@ -275,7 +284,7 @@ sds makeHTTPGETCall(const char *url, int *resptr) {
             /* Return 0 if the request worked but returned a 500 code. */
             long code;
             curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
-            if (code == 500 && resptr) *resptr = 0;
+            if ((code == 500 || code == 400) && resptr) *resptr = 0;
         }
 
         /* always cleanup */
@@ -351,7 +360,7 @@ int botSendImage(int64_t target, char *filename) {
             "https://api.telegram.org/bot%s/sendPhoto", Bot.apikey);
         curl_easy_setopt(curl, CURLOPT_URL, url);
         curl_easy_setopt(curl, CURLOPT_HTTPPOST, formpost);
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, makeHTTPGETCallWriter);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, makeHTTPGETCallWriterSDS);
         sds body = sdsempty(); // Accumulate the reply here.
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &body);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
@@ -390,7 +399,7 @@ int botSendImage(int64_t target, char *filename) {
 
 /* Send a message to the specified channel, optionally as a reply to a
  * specific message (if reply_to is non zero).
- * Return 0 on success, 1 on error. */
+ * Return 1 on success, 0 on error. */
 int botSendMessageAndGetInfo(int64_t target, sds text, int64_t reply_to, int64_t *chat_id, int64_t *message_id) {
     char *options[10];
     int optlen = 4;
@@ -431,14 +440,14 @@ int botSendMessageAndGetInfo(int64_t target, sds text, int64_t reply_to, int64_t
 /* Like botSendMessageWithInfo() but without returning by reference
  * the chat and message IDs that are only useful if you want to
  * edit the message later.
- * Return 0 on success, 1 on error. */
+ * Return 1 on success, 0 on error. */
 int botSendMessage(int64_t target, sds text, int64_t reply_to) {
     return botSendMessageAndGetInfo(target,text,reply_to,NULL,NULL);
 }
 
 /* Send a message to the specified channel, optionally as a reply to a
  * specific message (if reply_to is non zero).
- * Return 0 on success, 1 on error. */
+ * Return 1 on success, 0 on error. */
 int botEditMessageText(int64_t chat_id, int message_id, sds text) {
     char *options[10];
     int optlen = 5;
@@ -461,6 +470,64 @@ int botEditMessageText(int64_t chat_id, int message_id, sds text) {
     return res;
 }
 
+/* This function should be called from the bot implementation callback.
+ * If the bot request has a file (the user can see that by inspecting
+ * the br->file_type field), then this function will attempt to download
+ * the file from Telegram and store it in the current working directory
+ * with the name 'br->file_id'.
+ *
+ * On success 1 is returned, otherwise 0.
+ * When the function returns successfully, the caller can access
+ * a file named 'br->file_id'. */
+int botGetFile(BotRequest *br, const char *target_filename) {
+    /* 1. Get the file information and path. */
+    char *options[2];
+    options[0] = "file_id";
+    options[1] = br->file_id;
+
+    int res;
+    sds body = makeGETBotRequest("getFile",&res,options,1);
+    if (res == 0) {
+        sdsfree(body);
+        return 0; // Error.
+    }
+
+    cJSON *json = cJSON_Parse(body);
+    cJSON *result = cJSON_Select(json,".result.file_path:s");
+    char *file_path = result ? result->valuestring : NULL;
+    sdsfree(body);
+    if (!file_path) return 0; // Error.
+
+    /* 2. Get the file content. */
+    CURL* curl = curl_easy_init();
+    if (!curl) return 0; // Error.
+
+    /* We need to open a file for writing. We will be
+     * using the curl callback in order to append to the
+     * file. */
+    FILE *fp = fopen(target_filename ? target_filename : br->file_id,"w");
+    if (fp == NULL) return 0; // We can't continue without the target file.
+
+    char url[1024];
+    snprintf(url, sizeof(url),
+        "https://api.telegram.org/file/bot%s/%s", Bot.apikey, file_path);
+    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, makeHTTPGETCallWriterFILE);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &fp);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 1L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 15);
+
+    /* Perform the request and cleanup. */
+    int retval = curl_easy_perform(curl) == CURLE_OK ? 1 : 0;
+    curl_easy_cleanup(curl);
+    fclose(fp);
+    /* Best effort removal of incomplete file. */
+    if (retval == 0) unlink(br->file_id);
+    return retval;
+}
+
 /* Free the bot request and associated data. */
 void freeBotRequest(BotRequest *br) {
     sdsfreesplitres(br->argv,br->argc);
@@ -479,6 +546,7 @@ BotRequest *createBotRequest(void) {
     br->target = 0;
     br->msg_id = 0;
     br->file_id = NULL;
+    br->file_size = 0;
     br->type = TB_TYPE_UNKNOWN;
     br->file_type = TB_FILE_TYPE_NONE;
     return br;
@@ -629,15 +697,17 @@ int64_t botProcessUpdates(int64_t offset, int timeout) {
         }
         if (time(NULL)-timestamp > 60*5) continue; // Ignore stale messages
 
-        /* Check for voice files. */
+        /* Check for files. */
         char *file_id = NULL;
         int file_type = TB_FILE_TYPE_NONE;
+        int64_t file_size = 0;
         cJSON *voice = cJSON_Select(msg,".voice.file_id:s");
         if (voice) {
             file_type = TB_FILE_TYPE_VOICE_OGG;
             file_id = voice->valuestring;
+            cJSON *size = cJSON_Select(msg,".voice.file_size:n");
+            file_size = size ? size->valuedouble : 0;
         }
-        if (chatid == NULL) continue;
 
         /* Spawn a thread that will handle the request. */
         botStats.queries++;
@@ -645,6 +715,7 @@ int64_t botProcessUpdates(int64_t offset, int timeout) {
         BotRequest *bt = createBotRequest();
         bt->file_type = file_type;
         bt->file_id = sdsnew(file_id);
+        bt->file_size = file_size;
         bt->type = type;
         bt->request = request;
         bt->from = from;
