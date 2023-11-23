@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include "botlib.h"
 
@@ -15,7 +16,16 @@ void handleRequest(sqlite3 *dbhandle, BotRequest *br) {
     char buf[256];
     char *where = br->type == TB_TYPE_PRIVATE ? "privately" : "publicly";
     snprintf(buf, sizeof(buf), "I just %s received: %s", where, br->request);
-    botSendMessage(br->target,buf,0);
+
+    int64_t sent_chat_id, sent_message_id;
+    botSendMessageAndGetInfo(br->target,buf,0,&sent_chat_id,&sent_message_id);
+    printf("Sent message IDs: chat_id:%lld message_id:%lld\n",
+        (long long) sent_chat_id, (long long) sent_message_id);
+
+    /* Edit message after 1 second. */
+    sleep(1);
+    snprintf(buf, sizeof(buf), "I just %s received: %s :D", where, br->request);
+    botEditMessageText(sent_chat_id,sent_message_id,buf);
 
     /* Words received in this request. */
     for (int j = 0; j < br->argc; j++)

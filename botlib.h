@@ -68,7 +68,9 @@ sds makeHTTPGETCall(const char *url, int *resptr);
 
 int startBot(char *createdb_query, int argc, char **argv, int flags, TBRequestCallback req_callback, TBCronCallback cron_callback, char **triggers);
 sds makeGETBotRequest(const char *action, int *resptr, char **optlist, int numopt);
+int botSendMessageAndGetInfo(int64_t target, sds text, int64_t reply_to, int64_t *chat_id, int64_t *message_id);
 int botSendMessage(int64_t target, sds text, int64_t reply_to);
+int botEditMessageText(int64_t chat_id, int message_id, sds text);
 int botSendImage(int64_t target, char *filename);
 
 /* Database. */

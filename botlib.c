@@ -389,8 +389,9 @@ int botSendImage(int64_t target, char *filename) {
  * ===========================================================================*/
 
 /* Send a message to the specified channel, optionally as a reply to a
- * specific message (if reply_to is non zero). */
-int botSendMessage(int64_t target, sds text, int64_t reply_to) {
+ * specific message (if reply_to is non zero).
+ * Return 0 on success, 1 on error. */
+int botSendMessageAndGetInfo(int64_t target, sds text, int64_t reply_to, int64_t *chat_id, int64_t *message_id) {
     char *options[10];
     int optlen = 4;
     options[0] = "chat_id";
@@ -411,9 +412,52 @@ int botSendMessage(int64_t target, sds text, int64_t reply_to) {
 
     int res;
     sds body = makeGETBotRequest("sendMessage",&res,options,optlen);
+
+    if (chat_id || message_id) {
+        cJSON *json = cJSON_Parse(body), *res;
+        res = cJSON_Select(json,".result.message_id:n");
+        if (res && message_id) *message_id = (int64_t) res->valuedouble;
+        res = cJSON_Select(json,".result.chat.id:n");
+        if (res && chat_id) *chat_id = (int64_t) res->valuedouble;
+        cJSON_Delete(json);
+    }
+
     sdsfree(body);
     sdsfree(options[1]);
     sdsfree(options[9]);
+    return res;
+}
+
+/* Like botSendMessageWithInfo() but without returning by reference
+ * the chat and message IDs that are only useful if you want to
+ * edit the message later.
+ * Return 0 on success, 1 on error. */
+int botSendMessage(int64_t target, sds text, int64_t reply_to) {
+    return botSendMessageAndGetInfo(target,text,reply_to,NULL,NULL);
+}
+
+/* Send a message to the specified channel, optionally as a reply to a
+ * specific message (if reply_to is non zero).
+ * Return 0 on success, 1 on error. */
+int botEditMessageText(int64_t chat_id, int message_id, sds text) {
+    char *options[10];
+    int optlen = 5;
+    options[0] = "chat_id";
+    options[1] = sdsfromlonglong(chat_id);
+    options[2] = "message_id";
+    options[3] = sdsfromlonglong(message_id);
+    options[4] = "text";
+    options[5] = text;
+    options[6] = "parse_mode";
+    options[7] = "Markdown";
+    options[8] = "disable_web_page_preview";
+    options[9] = "true";
+
+    int res;
+    sds body = makeGETBotRequest("editMessageText",&res,options,optlen);
+    sdsfree(body);
+    sdsfree(options[1]);
+    sdsfree(options[3]);
     return res;
 }
 
