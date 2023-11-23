@@ -24,7 +24,7 @@ typedef struct BotRequest {
     int64_t msg_id;     /* Message ID. */
     sds *argv;          /* Request split to single words. */
     int argc;           /* Number of words. */
-    int file_type;      /* TB_MEDIA_* */
+    int file_type;      /* TB_FILE_TYPE_* */
     sds file_id;        /* File ID if a file is present in the message.
                          * The file format will be given by file_type. */
 } BotRequest;
@@ -42,10 +42,8 @@ typedef void (*TBCronCallback)(sqlite3 *dbhandle);
 #define TB_TYPE_SUPERGROUP 3
 #define TB_TYPE_CHANNEL 4
 
-#define TB_MEDIA_NONE 0
-#define TB_MEDIA_IMAGE 1
-#define TB_MEDIA_AUDIO 2
-#define TB_MEDIA_VOICE 3
+#define TB_FILE_TYPE_NONE 0
+#define TB_FILE_TYPE_VOICE_OGG 1
 /* ... More ar missing ... */
 
 /* Concatenate this when starting the bot and passing your create

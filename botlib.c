@@ -480,7 +480,7 @@ BotRequest *createBotRequest(void) {
     br->msg_id = 0;
     br->file_id = NULL;
     br->type = TB_TYPE_UNKNOWN;
-    br->file_type = TB_MEDIA_NONE;
+    br->file_type = TB_FILE_TYPE_NONE;
     return br;
 }
 
@@ -604,17 +604,19 @@ int64_t botProcessUpdates(int64_t offset, int timeout) {
         if (date == NULL) continue;
         time_t timestamp = date->valuedouble;
         cJSON *text = cJSON_Select(msg,".text:s");
-        if (text == NULL) continue;
+        /* Text may be NULL even if the message is valid but
+         * is a voice message, image, ... .*/
+
         if (Bot.verbose) printf(".text (from: %lld, target: %lld): %s\n",
             (long long) from,
             (long long) target,
-            text->valuestring);
+            text ? text->valuestring : "<no text field>");
 
         /* Sanity check the request before starting the thread:
          * validate that is a request that is really targeting our bot
          * list of "triggers". */
-        char *s = text->valuestring;
-        if (type != TB_TYPE_PRIVATE && Bot.triggers) {
+        if (text && type != TB_TYPE_PRIVATE && Bot.triggers) {
+            char *s = text->valuestring;
             int j;
             for (j = 0; Bot.triggers[j]; j++) {
                 if (strmatch(Bot.triggers[j], strlen(Bot.triggers[j]),
@@ -627,10 +629,22 @@ int64_t botProcessUpdates(int64_t offset, int timeout) {
         }
         if (time(NULL)-timestamp > 60*5) continue; // Ignore stale messages
 
+        /* Check for voice files. */
+        char *file_id = NULL;
+        int file_type = TB_FILE_TYPE_NONE;
+        cJSON *voice = cJSON_Select(msg,".voice.file_id:s");
+        if (voice) {
+            file_type = TB_FILE_TYPE_VOICE_OGG;
+            file_id = voice->valuestring;
+        }
+        if (chatid == NULL) continue;
+
         /* Spawn a thread that will handle the request. */
         botStats.queries++;
-        sds request = sdsnew(text->valuestring);
+        sds request = sdsnew(text ? text->valuestring : "");
         BotRequest *bt = createBotRequest();
+        bt->file_type = file_type;
+        bt->file_id = sdsnew(file_id);
         bt->type = type;
         bt->request = request;
         bt->from = from;
@@ -643,6 +657,7 @@ int64_t botProcessUpdates(int64_t offset, int timeout) {
         }
         if (Bot.verbose)
             printf("Starting thread to serve: \"%s\"\n",bt->request);
+
         /* It's up to the callback to free the bot request with
          * freeBotRequest(). */
     }

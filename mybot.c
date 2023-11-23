@@ -32,6 +32,11 @@ void handleRequest(sqlite3 *dbhandle, BotRequest *br) {
         printf("%d. %s | ", j, br->argv[j]);
     printf("\n");
 
+    /* Show if the message has a voice file inside. */
+    if (br->file_type == TB_FILE_TYPE_VOICE_OGG) {
+        printf("Voice file ID: %s\n", br->file_id);
+    }
+
     /* Let's use our key-value store API on top of Sqlite. If the
      * user in a Telegram group tells "foo is bar" we will set the
      * foo key to bar. Then if somebody write "foo?" and we have an
