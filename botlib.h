@@ -24,7 +24,9 @@ typedef struct BotRequest {
     int64_t msg_id;     /* Message ID. */
     sds *argv;          /* Request split to single words. */
     int argc;           /* Number of words. */
-    int media_type;     /* TB_MEDIA_* */
+    int file_type;      /* TB_MEDIA_* */
+    sds file_id;        /* File ID if a file is present in the message.
+                         * The file format will be given by file_type. */
 } BotRequest;
 
 /* Bot callback type. This must be registed when the bot is initialized.
@@ -72,6 +74,7 @@ int botSendMessageAndGetInfo(int64_t target, sds text, int64_t reply_to, int64_t
 int botSendMessage(int64_t target, sds text, int64_t reply_to);
 int botEditMessageText(int64_t chat_id, int message_id, sds text);
 int botSendImage(int64_t target, char *filename);
+void freeBotRequest(BotRequest *br);
 
 /* Database. */
 int kvSetLen(sqlite3 *dbhandle, const char *key, const char *value, size_t vlen, int64_t expire);

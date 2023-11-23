@@ -465,6 +465,7 @@ int botEditMessageText(int64_t chat_id, int message_id, sds text) {
 void freeBotRequest(BotRequest *br) {
     sdsfreesplitres(br->argv,br->argc);
     sdsfree(br->request);
+    sdsfree(br->file_id);
     free(br);
 }
 
@@ -477,8 +478,9 @@ BotRequest *createBotRequest(void) {
     br->from = 0;
     br->target = 0;
     br->msg_id = 0;
+    br->file_id = NULL;
     br->type = TB_TYPE_UNKNOWN;
-    br->media_type = TB_MEDIA_NONE;
+    br->file_type = TB_MEDIA_NONE;
     return br;
 }
 
@@ -641,6 +643,8 @@ int64_t botProcessUpdates(int64_t offset, int timeout) {
         }
         if (Bot.verbose)
             printf("Starting thread to serve: \"%s\"\n",bt->request);
+        /* It's up to the callback to free the bot request with
+         * freeBotRequest(). */
     }
 
 fmterr:
