@@ -52,15 +52,16 @@ void handleRequest(sqlite3 *dbhandle, BotRequest *br) {
 
     int reqlen = strlen(br->request);
     if (br->argc == 1 && reqlen && br->request[reqlen-1] == '?') {
-        char *copy = strdup(br->request);
+        sds copy = sdsdup(br->request);
+
         copy[reqlen-1] = 0;
         printf("Looking for key %s\n", copy);
         sds res = kvGet(dbhandle,copy);
         if (res) {
             botSendMessage(br->target,res,0);
+            sdsfree(res);
         }
-        sdsfree(res);
-        free(copy);
+        sdsfree(copy);
     }
 }
 
