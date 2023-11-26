@@ -30,6 +30,12 @@ void handleRequest(sqlite3 *dbhandle, BotRequest *br) {
     /* Words received in this request. */
     for (int j = 0; j < br->argc; j++)
         printf("%d. %s | ", j, br->argv[j]);
+    printf("is was mentioned? %d | ", br->bot_mentioned);
+    if (br->mentions) {
+        printf("mentions: ");
+        for (int j = 0; j < br->num_mentions; j++)
+            printf("%s, ",br->mentions[j]);
+    }
     printf("\n");
 
     /* Show if the message has a voice file inside. */

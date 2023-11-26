@@ -40,7 +40,7 @@
  * Selectors can be combined, and the special "*" can be used in order to
  * fetch array indexes or field names from the arguments:
  *
- *      cJSON *myobj = cJSON_Parse(root,".properties[*].*", index, fieldname);
+ *      cJSON *myobj = cJSON_Select(root,".properties[*].*", index, fieldname);
  */
 #define JSEL_INVALID 0
 #define JSEL_OBJ 1            /* "." */

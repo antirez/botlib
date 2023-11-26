@@ -64,6 +64,7 @@ struct {
     char *dbfile;                       // Change with --dbfile.
     char **triggers;                    // Strings triggering processing.
     sds apikey;                         // Telegram API key for the bot.
+    sds username;                       // Bot username from getMe call.
     TBRequestCallback req_callback;     // Callback handling requests.
     TBCronCallback cron_callback;
 } Bot;
@@ -397,6 +398,20 @@ int botSendImage(int64_t target, char *filename) {
  * Higher level Telegram bot API.
  * ===========================================================================*/
 
+/* Return the bot username. */
+char *botGetUsername(void) {
+    int res;
+
+    if (Bot.username) return Bot.username;
+    sds body = makeGETBotRequest("getMe",&res,NULL,0);
+    if (res == 0) return NULL;
+
+    cJSON *json = cJSON_Parse(body), *username;
+    username = cJSON_Select(json,".result.username:s");
+    if (username) Bot.username = sdsnew(username->valuestring);
+    return Bot.username;
+}
+
 /* Send a message to the specified channel, optionally as a reply to a
  * specific message (if reply_to is non zero).
  * Return 1 on success, 0 on error. */
@@ -533,6 +548,10 @@ void freeBotRequest(BotRequest *br) {
     sdsfreesplitres(br->argv,br->argc);
     sdsfree(br->request);
     sdsfree(br->file_id);
+    if (br->mentions) {
+        for (int j = 0; j < br->num_mentions; j++) sdsfree(br->mentions[j]);
+        free(br->mentions);
+    }
     free(br);
 }
 
@@ -549,6 +568,9 @@ BotRequest *createBotRequest(void) {
     br->file_size = 0;
     br->type = TB_TYPE_UNKNOWN;
     br->file_type = TB_FILE_TYPE_NONE;
+    br->bot_mentioned = 0;
+    br->mentions = NULL;
+    br->num_mentions = 0;
     return br;
 }
 
@@ -697,37 +719,58 @@ int64_t botProcessUpdates(int64_t offset, int timeout) {
         }
         if (time(NULL)-timestamp > 60*5) continue; // Ignore stale messages
 
+        /* At this point we are sure we are going to pass the request
+         * to our callback. Prepare the request object. */
+        sds request = sdsnew(text ? text->valuestring : "");
+        BotRequest *br = createBotRequest();
+        br->request = request;
+
         /* Check for files. */
-        char *file_id = NULL;
-        int file_type = TB_FILE_TYPE_NONE;
-        int64_t file_size = 0;
         cJSON *voice = cJSON_Select(msg,".voice.file_id:s");
         if (voice) {
-            file_type = TB_FILE_TYPE_VOICE_OGG;
-            file_id = voice->valuestring;
+            br->file_type = TB_FILE_TYPE_VOICE_OGG;
+            br->file_id = voice->valuestring;
             cJSON *size = cJSON_Select(msg,".voice.file_size:n");
-            file_size = size ? size->valuedouble : 0;
+            br->file_size = size ? size->valuedouble : 0;
         }
+        
+        /* Parse entities, filling the mentions array. */
+        cJSON *entities = cJSON_Select(msg,".entities[0]");
+        while(entities) {
+            cJSON *et = cJSON_Select(entities,".type:s");
+            cJSON *offset = cJSON_Select(entities,".offset:n");
+            cJSON *length = cJSON_Select(entities,".length:n");
+            if (et && offset && length && !strcmp(et->valuestring,"mention")) {
+                unsigned long off = offset->valuedouble;
+                unsigned long len = length->valuedouble;
+                /* Don't trust Telegram offsets inside our stirng. */
+                if (off+len <= sdslen(br->request)) {
+                    sds mention = sdsnewlen(br->request+off,len);
+                    br->num_mentions++;
+                    br->mentions = xrealloc(br->mentions,br->num_mentions);
+                    br->mentions[br->num_mentions-1] = mention;
+                    /* Is the user addressing the bot? Set the flag. */
+                    if (Bot.username && !strcmp(Bot.username,mention+1))
+                        br->bot_mentioned = 1;
+                }
+            }
+            entities = entities->next;
+        }
+
+        br->type = type;
+        br->from = from;
+        br->target = target;
+        br->msg_id = message_id;
 
         /* Spawn a thread that will handle the request. */
         botStats.queries++;
-        sds request = sdsnew(text ? text->valuestring : "");
-        BotRequest *bt = createBotRequest();
-        bt->file_type = file_type;
-        bt->file_id = sdsnew(file_id);
-        bt->file_size = file_size;
-        bt->type = type;
-        bt->request = request;
-        bt->from = from;
-        bt->target = target;
-        bt->msg_id = message_id;
         pthread_t tid;
-        if (pthread_create(&tid,NULL,botHandleRequest,bt) != 0) {
-            freeBotRequest(bt);
+        if (pthread_create(&tid,NULL,botHandleRequest,br) != 0) {
+            freeBotRequest(br);
             continue;
         }
         if (Bot.verbose)
-            printf("Starting thread to serve: \"%s\"\n",bt->request);
+            printf("Starting thread to serve: \"%s\"\n",br->request);
 
         /* It's up to the callback to free the bot request with
          * freeBotRequest(). */
@@ -750,6 +793,8 @@ fmterr:
 void botMain(void) {
     int64_t nextid = -100; /* Start getting the last 100 messages. */
     int previd;
+
+    botGetUsername(); // Will cache Bot.username as side effect.
     while(1) {
         previd = nextid;
         nextid = botProcessUpdates(nextid,1);
