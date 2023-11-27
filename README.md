@@ -1,6 +1,111 @@
 # BOTLIB - Telegram C bot framework
 
-WARNING: API is work in progress. Don't consider it reliable until this message is removed.
+Botlib is a C framework to write Telegram bots. It is mainly the sum of two things:
+
+1. An implementation of a subset of the Telegram bot API, wrapped in an event loop that waits for events from the Telegram API and calls our callback in the context of a new thread. The callback that implements the bot has access to various APIs to perform actions in Telegram.
+2. A set of higher level wrappers for Sqlite3, JSON, and dynamic strings (SDS library).
+
+## Why this library is written in C?
+
+* First of all, this framework makes writing bots in C a lot more higher level than you could expect. Sqlite3 is exported as a high level API and also exported as a key-value store. Callbacks are called with a structure that already has all the informations about the incoming message, and so forth.
+* In the high level languages landscape I had a few bad experiences with libraries changing APIs continuously. A bot is something you write and put online for years: I don't want to babysit code that already works. Bots written with this library will run everywhere as long as you can compile them with `make`. The only dependencies are `libcurl` and `libsqlite3`, which are basically everywhere.
+* In the process of writing a few Telegram bots, I found that many requests are quite long living. Think at a bot that transcribes the audio into text, or that uses another external API to fetch information. So multiplexing is not the way to go most of the times: this is why this library uses a thread for each request. And if you use threads like that, you want each thread to be as bare metal as possible, sharing most of the state with the main thread. C is good at that, and the library is implemented so that all the threading issues are transparent for the bot writer.
+* Certain bots are quite CPU intensive to run. For instance I wrote a bot that performs analysis on the financial market, and C was a good fit to do Montecaro simulations and things like that.
+
+To give you some feeling about how bots are developed with this framework, see this trivial example, implementing a toy bot:
+
+```c
+/* ... standard includes here ... */
+#include "botlib.h"
+
+/* For each bot command, private message or group message (but this only works
+ * if the bot is set as group admin), this function is called in a new thread,
+ * with its private state, sqlite database handle and so forth.
+ *
+ * For group messages, this function is ONLY called if one of the patterns
+ * specified as "triggers" in startBot() matched the message. Otherwise we
+ * would spawn threads too often :) */
+void handleRequest(sqlite3 *dbhandle, BotRequest *br) {
+    char buf[256];
+    char *where = br->type == TB_TYPE_PRIVATE ? "privately" : "publicly";
+    snprintf(buf, sizeof(buf), "I just %s received: %s", where, br->request);
+
+    int64_t sent_chat_id, sent_message_id;
+    botSendMessageAndGetInfo(br->target,buf,0,&sent_chat_id,&sent_message_id);
+    printf("Sent message IDs: chat_id:%lld message_id:%lld\n",
+        (long long) sent_chat_id, (long long) sent_message_id);
+
+    /* Edit message after 1 second. */
+    sleep(1);
+    snprintf(buf, sizeof(buf), "I just %s received: %s :D", where, br->request);
+    botEditMessageText(sent_chat_id,sent_message_id,buf);
+
+    /* Words received in this request. */
+    for (int j = 0; j < br->argc; j++)
+        printf("%d. %s | ", j, br->argv[j]);
+    printf("is was mentioned? %d | ", br->bot_mentioned);
+    if (br->mentions) {
+        printf("mentions: ");
+        for (int j = 0; j < br->num_mentions; j++)
+            printf("%s, ",br->mentions[j]);
+    }
+    printf("\n");
+
+    /* Show if the message has a voice file inside. */
+    if (br->file_type == TB_FILE_TYPE_VOICE_OGG) {
+        printf("Voice file ID: %s\n", br->file_id);
+        botGetFile(br,"audio.oga");
+    }
+
+    /* Let's use our key-value store API on top of Sqlite. If the
+     * user in a Telegram group tells "foo is bar" we will set the
+     * foo key to bar. Then if somebody write "foo?" and we have an
+     * associated key, we reply with what "foo" is. */
+    if (br->argc >= 3 && !strcasecmp(br->argv[1],"is")) {
+        kvSet(dbhandle,br->argv[0],br->request,0);
+        /* Note that in this case we don't use 0 as "from" field, so
+         * we are sending a reply to the user, not a general message
+         * on the channel. */
+        botSendMessage(br->target,"Ok, I'll remember.",br->msg_id);
+    }
+
+    int reqlen = strlen(br->request);
+    if (br->argc == 1 && reqlen && br->request[reqlen-1] == '?') {
+        char *copy = strdup(br->request);
+        copy[reqlen-1] = 0;
+        printf("Looking for key %s\n", copy);
+        sds res = kvGet(dbhandle,copy);
+        if (res) {
+            botSendMessage(br->target,res,0);
+        }
+        sdsfree(res);
+        free(copy);
+    }
+}
+
+// This is just called every 1 or 2 seconds. */
+void cron(sqlite3 *dbhandle) {
+    UNUSED(dbhandle);
+    printf("."); fflush(stdout);
+}
+
+int main(int argc, char **argv) {
+    /* Only group messages matching this list of glob patterns
+     * are passed to the callback. */
+    static char *triggers[] = {
+        "Echo *",
+        "Hi!",
+        "* is *",
+        "*\?",
+        "!ls",
+        NULL,
+    };
+    startBot(TB_CREATE_KV_STORE, argc, argv, TB_FLAGS_NONE, handleRequest, cron, triggers);
+    return 0; /* Never reached. */
+}
+```
+
+See further in this README file for the full API specification.
 
 ## Installation
 
