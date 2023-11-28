@@ -254,7 +254,7 @@ size_t makeHTTPGETCallWriterFILE(char *ptr, size_t size, size_t nmemb, void *use
 
 /* Request the specified URL in a blocking way, returns the content (or
  * error string) as an SDS string. If 'resptr' is not NULL, the integer
- * will be set, by referece, to 1 or 0 to indicate success or error.
+ * will be set, by reference, to 1 or 0 to indicate success or error.
  * The returned SDS string must be freed by the caller both in case of
  * error and success. */
 sds makeHTTPGETCall(const char *url, int *resptr) {
