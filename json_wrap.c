@@ -113,7 +113,7 @@ cJSON *cJSON_Select(cJSON *o, const char *fmt, ...) {
                 }
                 /* Common path. */
                 if (tlen+len > JSEL_MAX_TOKEN) goto notfound;
-                memcpy(token+tlen,buf,len);
+                memcpy(token+tlen,s,len);
                 tlen += len;
                 p++;
                 continue;
