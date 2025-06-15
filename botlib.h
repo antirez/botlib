@@ -20,6 +20,7 @@ typedef struct BotRequest {
     int type;           /* TB_TYPE_PRIVATE, ... */
     sds request;        /* The request string. */
     int64_t from;       /* ID of user sending the message. */
+    sds from_username;  /* Username of the user sending the message. */
     int64_t target;     /* Target channel/user where to reply. */
     int64_t msg_id;     /* Message ID. */
     sds *argv;          /* Request split to single words. */

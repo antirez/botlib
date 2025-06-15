@@ -548,6 +548,7 @@ void freeBotRequest(BotRequest *br) {
     sdsfreesplitres(br->argv,br->argc);
     sdsfree(br->request);
     sdsfree(br->file_id);
+    sdsfree(br->from_username);
     if (br->mentions) {
         for (int j = 0; j < br->num_mentions; j++) sdsfree(br->mentions[j]);
         free(br->mentions);
@@ -562,6 +563,7 @@ BotRequest *createBotRequest(void) {
     br->argc = 0;
     br->argv = NULL;
     br->from = 0;
+    br->from_username = NULL;
     br->target = 0;
     br->msg_id = 0;
     br->file_id = NULL;
@@ -677,6 +679,9 @@ int64_t botProcessUpdates(int64_t offset, int timeout) {
         cJSON *fromid = cJSON_Select(msg,".from.id:n");
         int64_t from = fromid ? (int64_t) fromid->valuedouble : 0;
 
+        cJSON *fromuser = cJSON_Select(msg,".from.username:s");
+        char *from_username = fromuser ? fromuser->valuestring : "unknown";
+
         cJSON *msgid = cJSON_Select(msg,".message_id:n");
         int64_t message_id = msgid ? (int64_t) msgid->valuedouble : 0;
 
@@ -724,6 +729,7 @@ int64_t botProcessUpdates(int64_t offset, int timeout) {
         sds request = sdsnew(text ? text->valuestring : "");
         BotRequest *br = createBotRequest();
         br->request = request;
+        br->from_username = sdsnew(from_username);
 
         /* Check for files. */
         cJSON *voice = cJSON_Select(msg,".voice.file_id:s");
@@ -733,7 +739,7 @@ int64_t botProcessUpdates(int64_t offset, int timeout) {
             cJSON *size = cJSON_Select(msg,".voice.file_size:n");
             br->file_size = size ? size->valuedouble : 0;
         }
-        
+
         /* Parse entities, filling the mentions array. */
         cJSON *entities = cJSON_Select(msg,".entities[0]");
         while(entities) {
