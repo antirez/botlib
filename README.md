@@ -30,33 +30,6 @@ void handleRequest(sqlite3 *dbhandle, BotRequest *br) {
     char *where = br->type == TB_TYPE_PRIVATE ? "privately" : "publicly";
     snprintf(buf, sizeof(buf), "I just %s received: %s", where, br->request);
 
-    int64_t sent_chat_id, sent_message_id;
-    botSendMessageAndGetInfo(br->target,buf,0,&sent_chat_id,&sent_message_id);
-    printf("Sent message IDs: chat_id:%lld message_id:%lld\n",
-        (long long) sent_chat_id, (long long) sent_message_id);
-
-    /* Edit message after 1 second. */
-    sleep(1);
-    snprintf(buf, sizeof(buf), "I just %s received: %s :D", where, br->request);
-    botEditMessageText(sent_chat_id,sent_message_id,buf);
-
-    /* Words received in this request. */
-    for (int j = 0; j < br->argc; j++)
-        printf("%d. %s | ", j, br->argv[j]);
-    printf("is was mentioned? %d | ", br->bot_mentioned);
-    if (br->mentions) {
-        printf("mentions: ");
-        for (int j = 0; j < br->num_mentions; j++)
-            printf("%s, ",br->mentions[j]);
-    }
-    printf("\n");
-
-    /* Show if the message has a voice file inside. */
-    if (br->file_type == TB_FILE_TYPE_VOICE_OGG) {
-        printf("Voice file ID: %s\n", br->file_id);
-        botGetFile(br,"audio.oga");
-    }
-
     /* Let's use our key-value store API on top of Sqlite. If the
      * user in a Telegram group tells "foo is bar" we will set the
      * foo key to bar. Then if somebody write "foo?" and we have an
@@ -105,9 +78,11 @@ int main(int argc, char **argv) {
 }
 ```
 
-See further in this README file for the full API specification.
+For the full example, showing other API calls, check the `mybot.c` file in this repository.  See further in this README file for the full API specification.
 
 ## Installation
+
+Before developing your bot, it's a good idea to be able to compile and run the example as a Telegram bot.
 
 1. Create your bot using the Telegram [@BotFather](https://t.me/botfather).
 2. After obtaining your bot API key, store it into a file called `apikey.txt` inside the bot working directory. Alternatively you can use the `--apikey` command line argument to provide your Telegram API key.
@@ -121,7 +96,13 @@ By default the bot will create an SQLite database in the working directory.
 If you want to specify another path for your SQLite db, use the `--dbfile`
 command line option.
 
-## APIs
+## Telegram APIs
+
+## Sqlite wrapper API
+
+## JSON wrapper API
+
+## SDS strings
 
 ... Work in progress ...
 
