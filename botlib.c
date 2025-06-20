@@ -409,6 +409,8 @@ char *botGetUsername(void) {
     cJSON *json = cJSON_Parse(body), *username;
     username = cJSON_Select(json,".result.username:s");
     if (username) Bot.username = sdsnew(username->valuestring);
+    sdsfree(body);
+    cJSON_Delete(json);
     return Bot.username;
 }
 
