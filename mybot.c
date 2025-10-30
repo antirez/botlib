@@ -1,5 +1,11 @@
+#if defined(__linux__)
+#define _DEFAULT_SOURCE
+#define _XOPEN_SOURCE 600
+#endif
+
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 #include <stdlib.h>
 #include <unistd.h>
 
